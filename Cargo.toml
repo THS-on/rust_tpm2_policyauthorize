@@ -1,0 +1,9 @@
+[package]
+name = "tpm2_sign2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+env_logger = "0.11.5"
+openssl = "0.10.68"
+tss-esapi = "7.5.1"
