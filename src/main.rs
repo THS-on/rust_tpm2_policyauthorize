@@ -1,10 +1,6 @@
 use std::{fs::File, io::Read, str::FromStr};
 
-use openssl::{
-    bn::{BigNum, BigNumContext},
-    ec::EcGroup,
-    nid::Nid,
-};
+use openssl::bn::{BigNum, BigNumContext};
 pub use tss_esapi::Error;
 use tss_esapi::{
     attributes::ObjectAttributesBuilder,
@@ -78,13 +74,12 @@ fn load_external_key(context: &mut Context) -> Result<(KeyHandle, Name), Error> 
         &read_file_to_buf("data/signing_key_public.pem").unwrap(),
     )
     .unwrap();
-    let group = EcGroup::from_curve_name(Nid::SECP384R1).unwrap();
     let mut ctx = BigNumContext::new().unwrap();
     let mut x = BigNum::new().unwrap();
     let mut y = BigNum::new().unwrap();
     signing_key
         .public_key()
-        .affine_coordinates_gfp(group.as_ref(), &mut x, &mut y, &mut ctx)
+        .affine_coordinates_gfp(signing_key.group(), &mut x, &mut y, &mut ctx)
         .expect("extract coords");
 
     let object_attributes = ObjectAttributesBuilder::new()
@@ -231,9 +226,7 @@ fn run() -> Result<(), Error> {
         .unwrap();
 
     let (signing_key_handle, name) = load_external_key(&mut context)?;
-    let pcr_policy_raw = read_file_to_buf("data/pcr.policy_desired").unwrap();
-    let pcr_policy_digest = Digest::try_from(pcr_policy_raw.clone())?;
-    let pcr_policy = MaxBuffer::try_from(pcr_policy_raw.clone())?;
+    let pcr_policy_digest = Digest::try_from(read_file_to_buf("data/pcr.policy_desired").unwrap())?;
 
     let signature: openssl::ecdsa::EcdsaSig =
         openssl::ecdsa::EcdsaSig::from_der(&read_file_to_buf("data/pcr.signature").unwrap())
@@ -246,7 +239,7 @@ fn run() -> Result<(), Error> {
 
     let (pcr_policy_digest_digest, _) = context.execute_without_session(|ctx| {
         ctx.hash(
-            pcr_policy.clone(),
+            MaxBuffer::try_from(pcr_policy_digest.value())?,
             HashingAlgorithm::Sha256,
             Hierarchy::Owner,
         )
